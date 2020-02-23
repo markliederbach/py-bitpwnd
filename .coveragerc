@@ -1,0 +1,5 @@
+[run]
+source =
+    bitpwnd
+[report]
+fail_under = 85

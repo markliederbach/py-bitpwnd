@@ -1,0 +1,97 @@
+version: '2'
+
+vars:
+  SRC_DIR: bitpwnd
+  PYTHON_VERSION:
+    sh: test -f .python-version && cat .python-version | sed 's/\/.*//g'
+  LOCAL_PYTHON:
+    sh: python --version | awk  '{print $2}'
+
+tasks:
+  test:
+    desc: Runs validation checks for CI pipelining
+    cmds:
+      - task: test:check-lock
+      - task: test:vulns
+      - task: test:pyfmt-check
+      - task: test:pytest
+
+  test:check-lock:
+    desc: Checks that Pipfile.lock matches what is in Pipfile
+    cmds:
+      - pipenv install --deploy
+    preconditions:
+      - sh: pipenv --version
+        msg: "Must install pipenv first!"
+
+  test:vulns:
+    desc: Verify all python packages do not have vulnerabilities
+    cmds:
+      - pipenv check
+    preconditions:
+      - sh: pipenv --version
+        msg: "Must install pipenv first!"
+
+  test:pyfmt-check:
+    desc: Runs python style check
+    cmds:
+      - cmd: pipenv run black --check --diff {{.SRC_DIR}} tests
+
+  test:pytest:
+    desc: Runs python tests
+    cmds:
+      - cmd: pipenv run pytest --cov --cov-report term-missing
+
+  deps:pypackages-dev:
+    desc: Installs all python packages for development and testing
+    cmds:
+      - cmd: pipenv install --dev
+
+  deps:pipenv:
+    desc: Installs pipenv or defers to existing installation
+    cmds:
+      - python3 -m pip install pipenv
+    status:
+      - which pipenv
+    preconditions:
+      - sh: test $PIPENV_PYTHON = "$(pyenv root)/shims/python"
+        msg: You must set the following variable in your .bashrc `export PIPENV_PYTHON=$(pyenv root)/shims/python`
+
+  deps:pyenv:
+      desc: Installs python packages to local environment
+      cmds:
+        - pyenv install --skip-existing {{.PYTHON_VERSION}}
+      preconditions:
+        - sh: pyenv --version
+          msg: "Must install pyenv first!"
+
+  deps:
+    desc: Sets up local environment for activities
+    cmds:
+      - task: deps:pyenv
+      - task: deps:pipenv
+      - task: deps:pypackages-dev
+
+  ci:pipenv:
+    desc: Installs pipenv for Travis
+    cmds:
+      - python3 -m pip install pipenv
+    status:
+      - which pipenv
+
+  ci:deps:
+    desc: Only used for Travis CI dependencies
+    cmds:
+      - task: ci:pipenv
+      - pipenv install --deploy --system --dev
+
+  ci:
+    desc: Run Travis CI
+    cmds:
+      - task: ci:deps
+      - task: test
+
+  pyfmt:
+    desc: Runs python black to format python files
+    cmds:
+      - cmd: pipenv run black {{.SRC_DIR}} tests
