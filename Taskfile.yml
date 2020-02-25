@@ -6,6 +6,7 @@ vars:
     sh: test -f .python-version && cat .python-version | sed 's/\/.*//g'
   LOCAL_PYTHON:
     sh: python --version | awk  '{print $2}'
+  GENERATED_DIR: generated
 
 tasks:
   test:
@@ -45,7 +46,7 @@ tasks:
   deps:pypackages-dev:
     desc: Installs all python packages for development and testing
     cmds:
-      - cmd: pipenv install --dev
+      - cmd: pipenv install --dev --pre
 
   deps:pipenv:
     desc: Installs pipenv or defers to existing installation
@@ -83,7 +84,7 @@ tasks:
     desc: Only used for Travis CI dependencies
     cmds:
       - task: ci:pipenv
-      - pipenv install --deploy --system --dev
+      - pipenv install --deploy --dev --pre
 
   ci:
     desc: Run Travis CI
@@ -94,4 +95,48 @@ tasks:
   pyfmt:
     desc: Runs python black to format python files
     cmds:
-      - cmd: pipenv run black {{.SRC_DIR}} tests
+      - cmd: pipenv run black {{.SRC_DIR}} tests setup.py
+  
+  build:generated-dir:
+    desc: Ensure the generated folder exists
+    cmds:
+      - cmd: mkdir -p {{.GENERATED_DIR}}
+    status:
+      - test -d {{.GENERATED_DIR}}
+
+  build:requirements:
+    desc: Generate a requirements.txt file from Pipfile.lock
+    deps:
+      - task: build:generated-dir
+    cmds:
+      - cmd: pipenv lock -r > {{.GENERATED_DIR}}/requirements.txt
+
+  bump:patch:
+    desc: Bump the patch version locally
+    cmds:
+      - task: bump
+        vars: {BUMP_TYPE: patch}
+
+  bump:minor:
+    desc: Bump the minor version locally
+    cmds:
+      - task: bump
+        vars: {BUMP_TYPE: minor}
+
+  bump:major:
+    desc: Bump the major version locally
+    cmds:
+      - task: bump
+        vars: {BUMP_TYPE: major}
+
+  bump:
+    desc: Bump the version locally
+    deps:
+      - task: build:generated-dir
+    vars:
+      GIT_CURRENT_VERSION:
+        sh: git fetch --tags && git describe --tags $(git rev-list --tags --max-count=1)
+    cmds:
+      - cmd: echo {{.GIT_CURRENT_VERSION}} > {{.GENERATED_DIR}}/version.txt
+        silent: true
+      - cmd: pipenv run bumpversion --current-version {{.GIT_CURRENT_VERSION}} {{.BUMP_TYPE}} {{.GENERATED_DIR}}/version.txt

@@ -1,0 +1,18 @@
+import os
+import logging
+import subprocess
+
+from bitpwnd import exceptions
+
+
+log = logging.getLogger(__name__)
+
+
+class Bitwarden:
+    def __init__(self, session_token=None, bw_path=None):
+        self.session_token = session_token or os.environ.get("BW_SESSION", None)
+        if self.session_token is None:
+            raise exceptions.BitwardenException(
+                "bw CLI requires a session token. Pass as an arg, or export BW_SESSION"
+            )
+        self.bw_path = bw_path or self.run_command("which bw")
